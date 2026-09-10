@@ -1,0 +1,207 @@
+================================================================================
+                    LLM SYSTEMS ENGINEERING - DAY 01 MASTER Architecture
+================================================================================
+
+Scope: Complete Production-Grade LLM Gateway Architecture (Concepts 01 to 16)
+
+================================================================================
+DAY 1 FINAL ARCHITECTURE
+================================================================================
+
+                         APPLICATION
+                              │
+                              ▼
+                        ┌───────────┐
+                        │ LLMClient │
+                        └─────┬─────┘
+                              │
+             ┌────────────────┼────────────────┐
+             │                │                │
+             ▼                ▼                ▼
+        Validation         Budget            Cache (Exact-Match)
+             │                │                │
+             └────────────────┼────────────────┘
+                              │
+                              ▼
+                    ┌──────────────────┐
+                    │ Reliability      │
+                    │                  │
+                    │ Timeout          │
+                    │ Retry             │
+                    │ Backoff + Jitter  │
+                    │ Circuit Breaker   │
+                    │ Fallback          │
+                    └────────┬─────────┘
+                             │
+                             ▼
+                    ┌─────────────────┐
+                    │ Provider Router │
+                    └────────┬────────┘
+                             │
+             ┌───────────────┼───────────────┐
+             ▼               ▼               ▼
+          OpenAI           Gemini         Anthropic
+          Adapter          Adapter          Adapter
+             │               │               │
+             └───────────────┼───────────────┘
+                             ▼
+                       LLM Response
+                             │
+             ┌───────────────┼────────────────┐
+             ▼               ▼                ▼
+       Structured         Tool Calls       Usage/Cost
+         Output
+             │
+             └────────────────┬────────────────┐
+                              ▼                ▼
+                       Observability       Evaluation
+                                                │
+                                                ▼
+                                               CI
+
+================================================================================
+FOLDER STRUCTURE OVERVIEW
+================================================================================
+
+day-01/
+│
+├── .github/
+│   └── workflows/
+│       └── ci.yml             # GitHub Actions CI & AI Evaluation Regression workflow
+├── package.json               # Project scripts: dev, challenge, test:eval, build
+├── tsconfig.json              # TypeScript configuration
+├── Architecture.txt           # Complete Master Architecture Notes (this document)
+│
+├── src/
+│   ├── index.ts               # Gateway end-to-end demonstration entrypoint
+│   ├── challenge.ts           # 500-Call Reliability Challenge benchmark runner
+│   ├── eval-suite.ts          # CI Evaluation & Regression test suite
+│   │
+│   └── llm/
+│       ├── types.ts           # Core interfaces (LLMRequest, LLMResponse, ToolCall, LLMCost)
+│       ├── errors.ts          # Typed error hierarchy with retryable flags
+│       ├── error-classifier.ts# HTTP status & error classifier (400 vs 429 vs 5xx vs CB)
+│       ├── validation.ts      # Zod validation schemas (LLMRequestSchema, LeadSchema)
+│       ├── structured-output.ts # Two-phase output parsing (JSON parse + Schema parse)
+│       ├── pricing.ts         # Model token pricing table (GPT-4o, Claude, Gemini, Demo)
+│       ├── cost.ts            # Token cost calculator
+│       ├── budget.ts          # LLMBudget cost guard and spend tracker
+│       ├── timeout.ts         # AbortController-based timeout wrapper (withTimeout)
+│       ├── retry.ts           # Exponential backoff + jitter + deadline retry loop (withRetry)
+│       ├── circuit-breaker.ts # Three-state circuit breaker per provider (CLOSED/OPEN/HALF_OPEN)
+│       ├── provider-router.ts # Smart fallback router isolating infrastructure from request errors
+│       ├── client.ts          # High-level LLMClient orchestrating the entire gateway
+│       │
+│       ├── cache/             # Exact-match caching subsystem
+│       │   ├── cache.interface.ts # LLMCache and CacheStats contracts
+│       │   ├── key-generator.ts   # Canonical deterministic SHA-256 cache key generator
+│       │   └── memory-cache.ts    # In-memory cache with TTL and stats
+│       │
+│       ├── providers/         # Vendor adapters implementing LLMProvider
+│       │   ├── base.provider.ts   # LLMProvider interface definition
+│       │   ├── openai.provider.ts # OpenAI adapter (ChatCompletions, real + simulated)
+│       │   ├── gemini.provider.ts # Google Gemini adapter (GenerateContent, real + simulated)
+│       │   ├── anthropic.provider.ts # Anthropic adapter (Messages, real + simulated)
+│       │   ├── mock.provider.ts   # Mock provider for latency/abort testing
+│       │   ├── flaky.provider.ts  # Provider simulating transient failures
+│       │   ├── error.provider.ts  # Provider simulating HTTP status codes
+│       │   └── success.provider.ts# Deterministic successful mock provider
+│       │
+│       ├── tools/             # Trusted tool execution subsystem
+│       │   ├── tool.interface.ts  # Tool definition contract with Zod parameter schema
+│       │   └── tool-registry.ts   # Tool registry with argument validation & safe execution
+│       │
+│       ├── observability/     # Pluggable observer subsystem
+│       │   ├── observer.interface.ts # LLMObserver & TraceEvent contracts
+│       │   ├── console-observer.ts   # Structured terminal logger
+│       │   └── metrics-collector.ts  # Metrics aggregator (latencies p50/p95/p99, tokens, costs)
+│       │
+│       └── eval/              # Evaluation & CI regression framework
+│           ├── evaluator.interface.ts # Evaluator, TestCase, and EvalReport contracts
+│           ├── exact-match.evaluator.ts # Exact match evaluator
+│           ├── schema.evaluator.ts    # Zod schema validity evaluator
+│           ├── llm-as-judge.evaluator.ts # LLM-as-judge semantic evaluator
+│           └── eval-runner.ts         # Evaluation dataset runner with scoring
+│
+
+
+================================================================================
+ALL 16 CONCEPTS - QUICK REFERENCE
+================================================================================
+
+[01] PROVIDER ABSTRACTION (src/llm/providers/base.provider.ts)
+     Defines a uniform contract (`LLMProvider`). Application talks only to `LLMClient`,
+     never directly to OpenAI/Gemini/Anthropic SDKs. Enables zero vendor lock-in.
+
+[02] REQUEST VALIDATION (src/llm/validation.ts)
+     Validates inputs before network calls via Zod (`LLMRequestSchema`). Rejects
+     empty prompts or illegal parameters in <1ms without burning API credits.
+
+[03] STRUCTURED OUTPUT (src/llm/structured-output.ts)
+     Phase 1 parsing: safely wraps `JSON.parse()`. Traps hallucinated text, conversational
+     prefixes, or broken syntax with typed domain errors.
+
+[04] OUTPUT SCHEMA VALIDATION (src/llm/structured-output.ts)
+     Phase 2 validation: parses raw JSON through Zod domain schemas (`LeadSchema`).
+     Guarantees runtime data matches TypeScript types.
+
+[05] TIMEOUTS & ABORT SIGNALS (src/llm/timeout.ts)
+     Wraps attempts in `AbortController`. Prevents hanging promises and socket leaks
+     by actively aborting underlying HTTP sockets when timers expire.
+
+[06] TYPED ERRORS & RETRYABILITY (src/llm/errors.ts)
+     Custom error taxonomy (`LLMError`, `LLMTimeoutError`, `LLMRateLimitError`,
+     `LLMValidationError`). Tags errors with `retryable: boolean`.
+
+[07] RETRY MECHANISM (src/llm/retry.ts)
+     Automated loop re-executing transient failures. Converts a 95% single-call success
+     rate into >99.8% availability without human intervention.
+
+[08] EXPONENTIAL BACKOFF (src/llm/retry.ts)
+     Calculates delay: `baseDelay * 2^(attempt - 1)` capped at `maxDelayMs`. Gives
+     recovering upstream servers breathing room.
+
+[09] JITTER (src/llm/retry.ts)
+     Adds pseudo-random variation to backoffs: `Math.random() * cappedDelay`.
+     Prevents the "Thundering Herd" problem by desynchronizing concurrent retries.
+
+[10] OVERALL REQUEST DEADLINE (src/llm/retry.ts & client.ts)
+     Hard global time budget (`totalTimeoutMs`) across all retries. Clamps attempt
+     timeouts and fails fast before futile backoff sleeps.
+
+[11] EXACT-MATCH CACHING (src/llm/cache/)
+     Canonicalizes requests into SHA-256 keys. Returns cached responses in <1ms
+     with zero incremental cost ($0.00).
+
+[12] CIRCUIT BREAKER & PROVIDER FALLBACK (src/llm/circuit-breaker.ts & provider-router.ts)
+     Maintains per-provider state machines (CLOSED/OPEN/HALF_OPEN). Routes traffic
+     to backup providers on transient failures, but fails fast on validation errors.
+
+[13] TRUSTED TOOL CALLING (src/llm/tools/)
+     Sandboxed tool execution layer. Validates LLM-supplied arguments against Zod
+     schemas before invoking internal functions.
+
+[14] OBSERVABILITY & METRICS (src/llm/observability/)
+     Pluggable Observer pattern decoupling telemetry from LLM code. Measures p50,
+     p95, p99 latencies, token consumption, costs, retries, and fallbacks.
+
+[15] EVALUATION & CI REGRESSION (src/llm/eval/ & src/eval-suite.ts)
+     Measures output semantic quality against test datasets. Automated test suite
+     fails the CI pipeline if accuracy regresses below predefined thresholds.
+
+[16] 500-CALL RELIABILITY CHALLENGE (src/challenge.ts)
+     Stress benchmark subjecting the gateway to 40% failure chaos across 500 requests.
+     Proves 100% availability, bounded latencies (<100ms), and automated fallback.
+
+================================================================================
+COMMANDS SUMMARY
+================================================================================
+- Run Unified Gateway Demo:
+  npm run dev
+
+- Run 500-Call Reliability Challenge:
+  npm run challenge
+
+- Run CI Evaluation & Regression Suite:
+  npm run test:eval
+================================================================================

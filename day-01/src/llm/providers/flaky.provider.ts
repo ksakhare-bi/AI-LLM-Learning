@@ -1,0 +1,37 @@
+import type { LLMRequest, LLMResponse } from "../types.js";
+import type { LLMProvider } from "./base.provider.js";
+import { LLMProviderError } from "../errors.js";
+
+export class FlakyLLMProvider implements LLMProvider {
+  private attempts = 0;
+
+  async generate(request: LLMRequest, _signal?: AbortSignal): Promise<LLMResponse> {
+    this.attempts++;
+
+    console.log(`Provider attempt: ${this.attempts}`);
+
+    if (this.attempts < 3) {
+      throw new LLMProviderError("Temporary provider failure");
+    }
+
+    return {
+      id: crypto.randomUUID(),
+
+      model: request.model,
+
+      content: JSON.stringify({
+        name: "John Doe",
+        email: "john@example.com",
+        company: "Acme"
+      }),
+
+      usage: {
+        inputTokens: 10,
+        outputTokens: 20,
+        totalTokens: 30
+      },
+
+      finishReason: "stop"
+    };
+  }
+}

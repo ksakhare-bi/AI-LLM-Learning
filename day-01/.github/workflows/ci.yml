@@ -1,0 +1,52 @@
+name: CI & AI Evaluation Regression Gate
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+    branches: [main, master]
+  workflow_dispatch:
+    inputs:
+      pass_threshold:
+        description: "Minimum evaluation pass rate threshold percentage (0-100)"
+        required: false
+        default: "100"
+
+jobs:
+  ci-regression:
+    name: Build & AI Evaluation Regression Gate
+    runs-on: ubuntu-latest
+
+    strategy:
+      matrix:
+        node-version: [20.x, 22.x]
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js ${{ matrix.node-version }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node-version }}
+          cache: "npm"
+
+      - name: Install Dependencies
+        run: npm ci || npm install
+
+      - name: Type Check (TypeScript)
+        run: npx tsc --noEmit
+
+      - name: Build Production Bundle
+        run: npm run build
+
+      - name: Run Unit & Observability Tests
+        run: |
+          npm run test:structured
+          npm run test:observability
+          npm run test:evaluation
+
+      - name: Run AI Evaluation & CI Regression Gate
+        env:
+          EVAL_PASS_THRESHOLD: ${{ inputs.pass_threshold || '100' }}
+        run: npm run test:eval

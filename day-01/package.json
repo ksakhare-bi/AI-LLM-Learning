@@ -1,0 +1,29 @@
+{
+  "name": "day-01-llm-systems",
+  "version": "1.0.0",
+  "main": "index.js",
+  "type": "module",
+  "scripts": {
+    "dev": "tsx src/index.ts",
+    "challenge": "tsx src/challenge.ts",
+    "test": "tsx src/eval-suite.ts",
+    "test:eval": "tsx src/eval-suite.ts",
+    "test:structured": "tsx test/structured-output.test.ts",
+    "test:observability": "tsx test/observability.test.ts",
+    "test:evaluation": "tsx test/evaluation.test.ts",
+    "build": "tsc",
+    "start": "node dist/index.js"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "description": "Day 1 LLM Systems Gateway Architecture",
+  "dependencies": {
+    "tsx": "^4.23.13",
+    "typescript": "^7.0.2",
+    "zod": "^4.6.1"
+  },
+  "devDependencies": {
+    "@types/node": "^22.20.2"
+  }
+}
