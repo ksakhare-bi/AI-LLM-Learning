@@ -1,0 +1,64 @@
+name: Day 02 - Agent Runtime CI & Evaluation Gate
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+    branches: [main, master]
+  workflow_dispatch:
+    inputs:
+      pass_threshold:
+        description: "Minimum evaluation pass rate threshold percentage (0-100)"
+        required: false
+        default: "100"
+
+jobs:
+  agent-runtime-ci:
+    name: Build, Tests & Agent Evaluation Gate
+    runs-on: ubuntu-latest
+
+    strategy:
+      matrix:
+        node-version: [20.x, 22.x]
+
+    defaults:
+      run:
+        working-directory: day-02
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js ${{ matrix.node-version }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node-version }}
+          cache: "npm"
+          cache-dependency-path: day-02/package-lock.json
+
+      - name: Install Dependencies
+        run: npm ci || npm install
+
+      - name: Type Check (TypeScript)
+        run: npx tsc --noEmit
+
+      - name: Build Production Bundle
+        run: npm run build
+
+      - name: Run Runtime Budgets & Cancellation Tests
+        run: npm run test:budget
+
+      - name: Run Memory Architectures Tests (Buffer, Compactor, VectorStore)
+        run: npm run test:memory
+
+      - name: Run Reflection & Self-Critique Tests
+        run: npm run test:reflection
+
+      - name: Run Evaluation Metrics Unit Tests (Precision, Recall, Trajectory)
+        run: npm run test
+
+      - name: Run 6-Step Intermittent Failure & Resume Challenge
+        run: npm run test:challenge
+
+      - name: Run Evaluation Benchmark Suite (Measurable Reflection Lift)
+        run: npm run test:eval

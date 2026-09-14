@@ -1,0 +1,243 @@
+================================================================================
+                    AGENT SYSTEMS ENGINEERING - DAY 02 MASTER ARCHITECTURE
+================================================================================
+
+Scope: Controllable, Resumable Agent Runtime with Memory, Reliability & Evaluation
+       (Concepts 01 to 16, Deep Build A & B, 6-Step Challenge)
+
+================================================================================
+DAY 2 FINAL SYSTEM ARCHITECTURE
+================================================================================
+
+                                APPLICATION
+                                     │
+                                     ▼
+                            ┌─────────────────┐
+                            │  AgentRuntime   │
+                            └────────┬────────┘
+                                     │
+                 ┌───────────────────┼───────────────────┐
+                 │                   │                   │
+                 ▼                   ▼                   ▼
+          ┌─────────────┐     ┌─────────────┐     ┌─────────────┐
+          │ StateMachine│     │ BudgetGuard │     │ MemoryTier  │
+          │             │     │             │     │             │
+          │ IDLE        │     │ maxSteps    │     │ Short-Term  │
+          │ RUNNING     │     │ maxTokens   │     │ Compactor   │
+          │ WAITING_TOOL│     │ maxCostUsd  │     │ VectorStore │
+          │ COMPLETED   │     │ AbortSignal │     │ (Cosine)    │
+          │ FAILED      │     └─────────────┘     └─────────────┘
+          │ CANCELLED   │
+          └──────┬──────┘
+                 │
+                 ▼
+          ┌─────────────┐
+          │  Decision   │
+          │  Provider   │◄───────────────────────┐
+          └──────┬──────┘                        │
+                 │                               │
+                 ▼                               │ Structured Error
+          ┌─────────────┐                        │ Feedback
+          │ Reflection  │                        │
+          │   Engine    │                        │
+          │             │                        │
+          │ Hallucinate │                        │
+          │ Constraints │                        │
+          │ Self-Critique                        │
+          └──────┬──────┘                        │
+                 │ Validated Decision            │
+                 ▼                               │
+          ┌──────────────────────────────────┐   │
+          │           Tool Layer             │   │
+          │                                  │   │
+          │ ┌───────────┐     ┌────────────┐ │   │
+          │ │ToolRegistry│    │ToolExecutor│ │   │
+          │ └───────────┘     └─────┬──────┘ │   │
+          │                         │        │   │
+          │                   Input │        │   │
+          │              Validation │        │   │
+          │                         ▼        │   │
+          │                   Timeout Wrapper│   │
+          │                         │        │   │
+          │                         ▼        │   │
+          │                   Retry + Backoff│───┘
+          └─────────────────────────┬────────┘
+                                    │
+                 ┌──────────────────┴──────────────────┐
+                 │                                     │
+                 ▼                                     ▼
+       ┌──────────────────┐                  ┌──────────────────┐
+       │ CheckpointStore  │                  │  ReplayRecorder  │
+       │                  │                  │                  │
+       │ MemoryStore      │                  │ Trace Events     │
+       │ FileStore (JSON) │                  │ ReplayEngine     │
+       │ Atomic Swap      │                  │ Auditability     │
+       │ Crash Recovery   │                  └──────────────────┘
+       └──────────────────┘
+                 │
+                 ▼
+       ┌──────────────────┐
+       │ Evaluation Suite │
+       │                  │
+       │ Task Success     │
+       │ Tool P/R & F1    │
+       │ Trajectory Score │
+       │ Reflection Lift  │
+       └──────────────────┘
+
+================================================================================
+AGENT STATE MACHINE TRANSITIONS
+================================================================================
+
+                          ┌──────────────┐
+                          │     IDLE     │
+                          └──────┬───────┘
+                                 │
+                            run()│
+                                 ▼
+                     ┌───────────────────────┐
+                     │        RUNNING        │◄─────────────────┐
+                     └───────────┬───────────┘                  │
+                                 │                              │
+                    ┌────────────┼────────────┐                 │
+                    │            │            │                 │
+            ToolCall│       Final│       Abort│                 │
+                    ▼            ▼            ▼                 │
+         ┌───────────────┐ ┌───────────┐ ┌───────────┐          │
+         │WAITING_FOR_TOOL││ COMPLETED │ │ CANCELLED │          │
+         └───────┬───────┘ └───────────┘ └───────────┘          │
+                 │                                              │
+    Tool Result  │                                              │
+    Recorded     └──────────────────────────────────────────────┘
+                 │
+                 ▼
+         (Error / Exception)
+                 │
+                 ▼
+           ┌───────────┐
+           │  FAILED   │
+           └───────────┘
+
+Every transition is atomically checkpointed to the CheckpointStore.
+If the process terminates at any point, rebooting calls runtime.resume(runId),
+which loads the exact snapshot and continues from that state.
+
+================================================================================
+FOLDER STRUCTURE OVERVIEW
+================================================================================
+
+day-02/
+│
+├── .github/
+│   └── workflows/
+│       └── ci.yml                 # GitHub Actions CI & Evaluation Gate workflow
+├── package.json                   # Project scripts: dev, challenge, test:all, eval, build
+├── tsconfig.json                  # TypeScript configuration
+├── Architecture.txt               # Master Architecture Notes (this document)
+│
+├── notes/                         # 16 In-depth conceptual guides
+│   ├── 01_agent_state_machine.txt
+│   ├── 02_loop_and_budget_guards.txt
+│   ├── 03_tool_validation_and_structured_errors.txt
+│   ├── 04_tool_timeouts_and_retries.txt
+│   ├── 05_state_persistence_and_checkpoints.txt
+│   ├── 06_crash_resilience_and_resume.txt
+│   ├── 07_deterministic_replay_and_tracing.txt
+│   ├── 08_unit_testing_nondeterministic_agents.txt
+│   ├── 09_short_term_memory_buffer.txt
+│   ├── 10_memory_compaction_and_summarization.txt
+│   ├── 11_vector_backed_long_term_memory.txt
+│   ├── 12_task_success_evaluation.txt
+│   ├── 13_tool_call_precision_and_recall.txt
+│   ├── 14_trajectory_scoring.txt
+│   ├── 15_reflection_and_self_critique.txt
+│   └── 16_coding_challenge_6_step_resumable_agent.txt
+│
+├── src/
+│   ├── index.ts                   # Integration scenarios (calc, errors, timeout, flaky, resume, replay)
+│   ├── challenge.ts               # 6-Step Intermittent Failure & Crash Resume Challenge runner
+│   ├── eval-suite.ts              # Agent evaluation & reflection benchmark runner
+│   │
+│   ├── config/
+│   │   ├── types.ts               # Core AgentState, AgentToolCall, AgentUsage, AgentCost
+│   │   ├── state.ts               # State creation and cloning utilities
+│   │   └── decision.ts            # AgentDecision union (FINAL, TOOL_CALL) with DecisionUsage
+│   │
+│   └── agent/
+│       ├── runtime.ts             # Core AgentRuntime state machine with step loop & checkpointing
+│       ├── budget.ts              # Step, token, and cost budget guard (AgentBudgetGuard)
+│       │
+│       ├── persistence/           # Checkpoint storage subsystem
+│       │   ├── checkpoint-store.ts        # CheckpointStore interface (save, load, delete)
+│       │   ├── memory-checkpoint-store.ts # In-memory checkpoint store for tests
+│       │   └── file-checkpoint-store.ts   # Atomic file-backed checkpoint store (.checkpoints/)
+│       │
+│       ├── replay/                # Deterministic execution replay
+│       │   ├── replay-event.ts    # Replay event contracts (DECISION, TOOL_RESULT)
+│       │   ├── replay-log.ts      # Serialized replay log structure
+│       │   ├── replay-recorder.ts # Runtime event recorder
+│       │   └── replay-engine.ts   # Deterministic state reconstructor without LLM calls
+│       │
+│       ├── tools/                 # Validated, resilient tool execution layer
+│       │   ├── tool.ts                    # AgentTool contract (validate, execute)
+│       │   ├── tool-registry.ts           # Tool registry
+│       │   ├── tool-executor.ts           # Tool executor with input validation, timeout, retries
+│       │   ├── tool-retry-executor.ts     # Exponential backoff + jitter retry wrapper
+│       │   ├── tool-error.ts              # Typed ToolError with retryable flag
+│       │   ├── tool-validation-error.ts   # Schema validation error
+│       │   ├── tool-timeout-error.ts      # Abort & timeout error
+│       │   ├── calculator.tool.ts         # Math calculation tool
+│       │   ├── flaky.tool.ts              # Intermittent failure tool (fails twice, succeeds 3rd)
+│       │   └── slow.tool.ts               # Long-latency simulation tool
+│       │
+│       ├── memory/                # Deep Build B: Three-tier memory architecture
+│       │   ├── short-term-buffer.ts       # Sliding window buffer with token bounds
+│       │   ├── memory-compactor.ts        # Compactor & structured conversation summarizer
+│       │   └── vector-memory-store.ts     # Semantic long-term vector store with cosine similarity
+│       │
+│       ├── reflection/            # Deep Build B: Self-critique engine
+│       │   └── self-critique-engine.ts    # Pre-execution decision verification & hallucination detector
+│       │
+│       └── eval/                  # Deep Build B: Agent evaluation harness
+│           ├── types.ts                   # Benchmark task, metrics, and summary interfaces
+│           ├── precision-recall.ts        # Tool-call precision, recall & F1 scoring
+│           ├── trajectory-scorer.ts       # Step efficiency & trajectory quality scorer
+│           └── agent-benchmark.ts         # Comparative benchmark runner (± reflection)
+│
+└── test/
+    ├── runtime-budget.test.ts     # Step/token budget limits and AbortSignal cancellation
+    ├── memory.test.ts             # Buffer, compactor, and vector store tests
+    ├── reflection.test.ts         # Tool hallucination and self-critique checks
+    ├── evaluation.test.ts         # Precision/recall and trajectory scoring tests
+    └── challenge.test.ts          # 6-step intermittent failure and crash-resume test
+
+================================================================================
+INTERVIEW HOUR ARCHITECTURAL DEEP DIVE
+================================================================================
+
+Problem: An agent in production loops forever, blows its token budget, and
+hallucinates tool calls.
+
+Root Causes:
+1. Infinite Loops: Model gets stuck oscillating between two decisions or retrying
+   the same failed tool with identical parameters. Without step limits, it runs forever.
+2. Token Blowout: Each cycle re-sends the growing conversation history. Without token
+   budget guards and compaction, costs explode exponentially.
+3. Tool Hallucination: Model invents tool names or schemas not present in registry.
+   Without hard validation, runtime either crashes unexpectedly or passes nonsense.
+
+Architectural Remedies Implemented in Day 2:
+1. Step & Token Budgets: AgentBudgetGuard enforces maxSteps, maxTokens, and maxCostUsd
+   on EVERY iteration. The moment a limit is reached, execution halts deterministically.
+2. Tool Layer Input Validation: ToolExecutor validates every tool invocation against
+   strict schemas before execution. Any discrepancy generates a structured TOOL_VALIDATION_ERROR
+   passed back to the LLM for self-correction.
+3. State Persistence & Crash Resume: State is saved to CheckpointStore at every step
+   and tool boundary. If a node fails or crashes, runtime.resume(runId) restores the exact
+   snapshot without data loss.
+4. Deterministic Replay: Every decision and tool output is recorded by ReplayRecorder.
+   ReplayEngine can re-run the entire execution trace in milliseconds with zero LLM API costs.
+5. Unit Testing Non-Deterministic Agents: Testing agents without live LLMs by:
+   - Injecting deterministic decision providers.
+   - Recording traces and replaying them under fault injection.
+   - Using trajectory assertion suites measuring tool precision, recall, and step efficiency.
