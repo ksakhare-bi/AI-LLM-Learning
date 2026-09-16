@@ -1,27 +1,38 @@
+export class TimeoutError extends Error {
+  constructor(timeoutMs: number, operationName = "Operation") {
+    super(`${operationName} timed out after ${timeoutMs}ms`);
+    this.name = "TimeoutError";
+  }
+}
+
 export async function withTimeout<T>(
   operation: Promise<T>,
   timeoutMs: number,
-  onTimeout?: () => void
+  onTimeout?: () => void,
+  operationName = "Operation"
 ): Promise<T> {
   let timer: ReturnType<typeof setTimeout> | undefined;
+  let didTimeout = false;
 
-  const timeout = new Promise<never>((_, reject) => {
+  // Suppress unhandled rejections if the wrapped operation fails AFTER the timeout fires
+  operation.catch(() => {
+    /* noop if already timed out */
+  });
+
+  const timeoutPromise = new Promise<never>((_, reject) => {
     timer = setTimeout(() => {
-      onTimeout?.();
-
-      reject(
-        new Error(
-          `Operation timed out after ${timeoutMs}ms`
-        )
-      );
+      didTimeout = true;
+      try {
+        onTimeout?.();
+      } catch {
+        /* ignore cleanup errors */
+      }
+      reject(new TimeoutError(timeoutMs, operationName));
     }, timeoutMs);
   });
 
   try {
-    return await Promise.race([
-      operation,
-      timeout
-    ]);
+    return await Promise.race([operation, timeoutPromise]);
   } finally {
     if (timer) {
       clearTimeout(timer);

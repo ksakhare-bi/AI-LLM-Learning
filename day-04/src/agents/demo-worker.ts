@@ -5,6 +5,9 @@ import type {
 } from "./types.js";
 
 export class DemoWorker implements WorkerAgent {
+  readonly role = "Demo Specialist Worker";
+  readonly capabilities = ["demonstration", "delay_simulation"];
+
   constructor(
     public readonly id: string,
     private readonly delayMs = 500
@@ -25,17 +28,15 @@ export class DemoWorker implements WorkerAgent {
       taskId: task.taskId,
       agentId: this.id,
       status: "success",
-
       data: {
-        message:
-          `${this.id} completed: ${task.description}`
+        message: `${this.id} completed: ${task.description}`
       },
-
       usage: {
         tokens: 100,
         costUsd: 0.01,
         durationMs: Date.now() - startedAt
-      }
+      },
+      timestamp: Date.now()
     };
   }
 
