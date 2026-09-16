@@ -1,0 +1,136 @@
+================================================================================
+                    ADVANCED RAG ARCHITECTURE - DAY 03 MASTER
+================================================================================
+
+Scope: High-Precision Retrieval at Scale, Hybrid Search, Two-Stage Re-Ranking,
+       Query Transformation, Hardening & Retrieval Evaluation Metrics
+       (Concepts 01 to 16, Deep Build A & B, 1-Hour Coding Challenge)
+
+================================================================================
+DAY 3 FINAL SYSTEM ARCHITECTURE
+================================================================================
+
+                               USER QUERY
+                                    │
+                                    ▼
+                      ┌───────────────────────────┐
+                      │    Query Transformation   │
+                      │                           │
+                      │  • Query Rewriter         │
+                      │  • Query Decomposer       │
+                      │  • HyDE Generator         │
+                      └─────────────┬─────────────┘
+                                    │
+                                    ▼
+                      ┌───────────────────────────┐
+                      │   Metadata Pre-Filtering  │
+                      │  (tenant, category, date) │
+                      └─────────────┬─────────────┘
+                                    │
+             ┌──────────────────────┴──────────────────────┐
+             │                                             │
+             ▼                                             ▼
+   ┌───────────────────┐                         ┌───────────────────┐
+   │  Dense Retriever  │                         │  BM25 / Sparse    │
+   │  (Semantic Embed) │                         │  (Exact Keywords) │
+   └─────────┬─────────┘                         └─────────┬─────────┘
+             │                                             │
+             │ Top-N Candidates                            │ Top-N Candidates
+             │                                             │
+             └──────────────────────┬──────────────────────┘
+                                    │
+                                    ▼
+                      ┌───────────────────────────┐
+                      │    Score Fusion Engine    │
+                      │                           │
+                      │  • Reciprocal Rank Fusion │
+                      │    RRF(d) = Σ 1/(k + r)   │
+                      │  • Relative Score Fusion  │
+                      │    (Min-Max Norm)         │
+                      └─────────────┬─────────────┘
+                                    │
+                                    ▼
+                         Wide Candidate Pool (Top-M)
+                                    │
+                                    ▼
+                      ┌───────────────────────────┐
+                      │    Two-Stage Re-Ranker    │
+                      │                           │
+                      │  • Cross-Encoder Scorer   │
+                      │  • Joint (Query, Chunk)   │
+                      │    Relevance Scoring      │
+                      └─────────────┬─────────────┘
+                                    │
+                                    ▼
+                          Top-K Precision Chunks
+                                    │
+                                    ▼
+                      ┌───────────────────────────┐
+                      │   RAG Hardening Layer     │
+                      │                           │
+                      │  • Lost-in-the-Middle     │
+                      │    Boundary Re-ordering   │
+                      │  • Context Budget Guard   │
+                      │  • Staleness / Invalidate │
+                      └─────────────┬─────────────┘
+                                    │
+                                    ▼
+                      ┌───────────────────────────┐
+                      │   Context Construction    │
+                      │   & LLM Generation Gate   │
+                      └─────────────┬─────────────┘
+                                    │
+                                    ▼
+                      ┌───────────────────────────┐
+                      │    Evaluation Suite       │
+                      │                           │
+                      │  Retrieval Metrics:       │
+                      │   • Recall@K              │
+                      │   • MRR (Mean Recip Rank) │
+                      │   • nDCG@K                │
+                      │   • Context Precision     │
+                      │  Generation Metrics:      │
+                      │   • Faithfulness (Ground) │
+                      │   • Answer Relevance      │
+                      └───────────────────────────┘
+
+================================================================================
+COMPONENT ROLES & SPECIFICATIONS
+================================================================================
+
+1. INGESTION & CHUNKING (src/ingestion/)
+   - StructureAwareChunker: Splits documents along natural semantic boundaries
+     (sections, headings, sentences) rather than naive character slicing.
+   - Metadata Propagation: Ensures title, section hierarchy, chunkIndex, and
+     timestamps are bundled with each chunk.
+
+2. RETRIEVAL & HYBRID SEARCH (src/retrieval/)
+   - DenseRetriever: Captures semantic intent and latent concepts.
+   - BM25Retriever: Captures exact term frequency, keyword precision, IDs, codes.
+   - ScoreFusion: Combines disjoint score distributions using:
+     * Reciprocal Rank Fusion (RRF): rank-based, resilient to score scale variance.
+     * Normalized Score Fusion: min-max normalized weighted linear interpolation.
+   - MetadataFilter: Pre-filters candidate chunks before or during retrieval.
+
+3. TWO-STAGE RE-RANKING (src/retrieval/)
+   - Stage 1 (Wide Recall): High-recall hybrid retrieval fetches top-M (e.g. 20-50).
+   - Stage 2 (High Precision): Cross-encoder evaluates query-chunk interactions
+     jointly with token-level cross-attention to produce top-K (e.g. 3-5).
+
+4. QUERY TRANSFORMATION (src/transformation/)
+   - QueryRewriter: Clarifies ambiguous queries, resolves pronouns/coreferences.
+   - QueryDecomposer: Breaks complex multi-hop queries into atomic sub-queries.
+   - HyDE: Generates a hypothetical ideal answer document to retrieve by embedding.
+
+5. RAG HARDENING (src/hardening/)
+   - LostInTheMiddle: Reorders ranked chunks so the most relevant chunks are at the
+     head and tail of the context prompt, where LLMs pay maximal attention.
+   - ContextBudgetGuard: Truncates and packs context strictly within token budgets.
+   - FreshnessManager: Validates document timestamps, applies decay multipliers,
+     and invalidates stale cache entries.
+
+6. EVALUATION SUITE (src/eval/)
+   - Retrieval Eval: Measures Recall@K, MRR, nDCG, and Context Precision on labeled datasets.
+   - Generation Eval: Measures Faithfulness (hallucination detector) and Answer Relevance.
+   - Benchmark: Compares Naive Top-K vs Hybrid vs Two-Stage Re-ranked pipelines.
+================================================================================
