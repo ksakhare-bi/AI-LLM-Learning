@@ -1,0 +1,35 @@
+{
+  "name": "day-05",
+  "version": "1.0.0",
+  "main": "dist/index.js",
+  "type": "module",
+  "scripts": {
+    "dev": "tsx src/index.ts",
+    "challenge": "tsx src/challenge.ts",
+    "benchmark": "tsx src/benchmark/raw-vs-lcel.ts",
+    "test": "tsx test/challenge.test.ts",
+    "test:all": "tsx test/challenge.test.ts && tsx test/lcel.test.ts && tsx test/streaming.test.ts && tsx test/fallback.test.ts && tsx test/parsers.test.ts",
+    "test:challenge": "tsx test/challenge.test.ts",
+    "test:lcel": "tsx test/lcel.test.ts",
+    "test:streaming": "tsx test/streaming.test.ts",
+    "test:fallback": "tsx test/fallback.test.ts",
+    "test:parsers": "tsx test/parsers.test.ts",
+    "build": "tsc",
+    "start": "node dist/index.js"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "description": "Day 5 - LangChain in Depth (and Its Limits)",
+  "dependencies": {
+    "@langchain/core": "^1.2.11",
+    "@langchain/openai": "^1.5.13",
+    "dotenv": "^17.4.2",
+    "zod": "^4.6.5"
+  },
+  "devDependencies": {
+    "@types/node": "^22.20.3",
+    "tsx": "^4.23.13",
+    "typescript": "^7.0.2"
+  }
+}
